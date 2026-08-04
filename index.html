@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Production Command Center — Shop-floor ERP for Press Shops &amp; CNC</title>
+<meta name="description" content="Production tracking, quality control (QC + SPC), and shop-floor visibility for press-shop and CNC manufacturers. Works fully offline. Standard and Enterprise editions.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%230F172A'/%3E%3Cpath d='M12 6a6 6 0 1 0 .01 0z' stroke='%230369A1' stroke-width='1.6' fill='none'/%3E%3Ccircle cx='12' cy='12' r='2.2' fill='%230369A1'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0F172A; --navy-2:#1E293B; --slate:#334155; --accent:#0369A1; --accent-2:#0284C7;
+    --bg:#F8FAFC; --surface:#FFFFFF; --border:#E2E8F0; --muted:#64748B; --ink:#0F172A;
+    --good:#15803D; --good-bg:#DCFCE7; --warn:#B45309; --warn-bg:#FEF3C7; --bad:#B91C1C;
+    --radius:12px; --radius-sm:8px;
+    --ease:cubic-bezier(.16,1,.3,1); --t-base:220ms;
+    --shadow:0 1px 2px rgba(15,23,42,.04), 0 8px 24px -8px rgba(15,23,42,.10);
+    --shadow-lg:0 4px 8px rgba(15,23,42,.04), 0 24px 48px -16px rgba(15,23,42,.18);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0B1220; --surface:#111A2B; --border:#243046; --ink:#EAF0FA; --muted:#93A3BE;
+      --navy-2:#16223A; --accent:#38BDF8; --accent-2:#0EA5E9;
+      --good:#4ADE80; --good-bg:rgba(74,222,128,.12); --warn:#FBBF24; --warn-bg:rgba(251,191,36,.12); --bad:#F87171;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -8px rgba(0,0,0,.5);
+      --shadow-lg:0 4px 8px rgba(0,0,0,.3), 0 24px 48px -16px rgba(0,0,0,.6);
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} *{animation-duration:.01ms!important;transition-duration:.01ms!important} }
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans",-apple-system,Segoe UI,sans-serif;
+    line-height:1.55; -webkit-font-smoothing:antialiased}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+  h1,h2,h3{font-family:"IBM Plex Sans",sans-serif;font-weight:700;line-height:1.2;margin:0 0 .5em;letter-spacing:-.01em}
+  p{margin:0 0 1em;color:var(--slate)}
+  @media (prefers-color-scheme:dark){ p{color:var(--muted)} }
+  a{color:inherit}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+  section{padding:88px 0}
+  @media (max-width:720px){ section{padding:56px 0} .wrap{padding:0 20px} }
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--accent-2);margin-bottom:14px}
+  .eyebrow svg{width:14px;height:14px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;font-weight:600;font-size:15px;
+    padding:12px 22px;border-radius:var(--radius-sm);border:1px solid transparent;cursor:pointer;text-decoration:none;
+    transition:transform var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease), background var(--t-base) var(--ease);
+    min-height:44px}
+  .btn:hover{transform:translateY(-1px)}
+  .btn:active{transform:translateY(0)}
+  .btn-primary{background:var(--accent);color:#fff;box-shadow:0 1px 2px rgba(3,105,161,.3), 0 8px 20px -8px rgba(3,105,161,.55)}
+  .btn-primary:hover{background:var(--accent-2)}
+  .btn-ghost{background:transparent;color:var(--ink);border-color:var(--border)}
+  .btn-ghost:hover{border-color:var(--accent)}
+  .btn-dark{background:var(--navy);color:#fff}
+  @media (prefers-color-scheme:dark){ .btn-dark{background:var(--surface);border:1px solid var(--border)} }
+  .btn svg{width:16px;height:16px;flex:0 0 auto}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+  /* ---- header ---- */
+  header{position:sticky;top:0;z-index:50;background:color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:72px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;text-decoration:none;color:var(--ink)}
+  .brand .mark{width:32px;height:32px;border-radius:8px;background:var(--navy);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .brand .mark svg{width:18px;height:18px;color:var(--accent)}
+  .navlinks{display:flex;align-items:center;gap:28px;font-size:14.5px;font-weight:500}
+  .navlinks a{text-decoration:none;color:var(--slate);transition:color var(--t-base) var(--ease)}
+  @media (prefers-color-scheme:dark){ .navlinks a{color:var(--muted)} }
+  .navlinks a:hover{color:var(--accent)}
+  .navRight{display:flex;align-items:center;gap:12px}
+  .navToggle{display:none;background:none;border:1px solid var(--border);border-radius:8px;width:40px;height:40px;
+    align-items:center;justify-content:center;cursor:pointer}
+  .navToggle svg{width:20px;height:20px}
+  @media (max-width:860px){
+    .navlinks{position:fixed;top:72px;left:0;right:0;background:var(--surface);border-bottom:1px solid var(--border);
+      flex-direction:column;align-items:flex-start;padding:20px 24px;gap:16px;transform:translateY(-8px);opacity:0;
+      pointer-events:none;transition:opacity var(--t-base) var(--ease), transform var(--t-base) var(--ease)}
+    body.navOpen .navlinks{opacity:1;transform:translateY(0);pointer-events:auto}
+    .navToggle{display:flex}
+    .navRight .btn-primary{padding:10px 16px;font-size:14px}
+  }
+
+  /* ---- hero ---- */
+  .hero{padding:96px 0 40px}
+  @media (max-width:860px){ .hero{padding:48px 0 24px} }
+  .heroGrid{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+  @media (max-width:980px){ .heroGrid{grid-template-columns:1fr;gap:40px} }
+  .hero h1{font-size:clamp(30px,4.4vw,50px);letter-spacing:-.02em}
+  .hero .lede{font-size:18px;max-width:52ch}
+  .hero .ctaRow{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+  .trustRow{display:flex;gap:22px;flex-wrap:wrap;margin-top:32px;font-size:13.5px;color:var(--muted)}
+  .trustRow .item{display:flex;align-items:center;gap:8px}
+  .trustRow svg{width:16px;height:16px;color:var(--good);flex:0 0 auto}
+
+  /* ---- recreated product panel (not a photo — built to match the real app's own UI exactly) ---- */
+  .panelShell{background:var(--navy);border-radius:16px;padding:4px;box-shadow:var(--shadow-lg)}
+  .panelInner{background:#0B1220;border-radius:13px;padding:20px 22px 24px;font-family:"IBM Plex Sans",sans-serif}
+  .panelChrome{display:flex;gap:6px;margin-bottom:16px}
+  .panelChrome i{width:9px;height:9px;border-radius:50%;background:#334155;display:block}
+  .kpiGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .kpiCard{background:#111A2B;border:1px solid #1E293B;border-radius:10px;padding:12px 13px}
+  .kpiCard .k{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:#7C8BA8;margin-bottom:6px}
+  .kpiCard .v{font-family:"IBM Plex Mono",monospace;font-size:21px;font-weight:600;color:#EAF0FA}
+  .kpiCard .v.good{color:#4ADE80} .kpiCard .v.warn{color:#FBBF24}
+  .kpiCard .h{font-size:11px;color:#64748B;margin-top:3px}
+  .spcMini{background:#111A2B;border:1px solid #1E293B;border-radius:10px;padding:14px 15px}
+  .spcMini .row1{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .badge-cap{background:rgba(74,222,128,.14);color:#4ADE80;font-size:11px;font-weight:700;letter-spacing:.03em;
+    padding:4px 10px;border-radius:20px}
+  .spcMini .lbl{font-size:12px;color:#93A3BE}
+  .spcStats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .spcStats div{text-align:left}
+  .spcStats .k{font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:#64748B}
+  .spcStats .v{font-family:"IBM Plex Mono",monospace;font-size:16px;font-weight:600;color:#EAF0FA}
+  .miniChart{margin-top:12px;height:46px;position:relative}
+  .miniChart svg{width:100%;height:100%;display:block}
+
+  /* ---- section headers ---- */
+  .secHead{max-width:640px;margin:0 auto 48px;text-align:center}
+  .secHead h2{font-size:clamp(24px,3vw,34px)}
+  .secHead p{font-size:16.5px}
+
+  /* ---- problem strip ---- */
+  .problemGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+  @media (max-width:980px){ .problemGrid{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:560px){ .problemGrid{grid-template-columns:1fr} }
+  .problemCard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px}
+  .problemCard svg{width:22px;height:22px;color:var(--bad);margin-bottom:12px}
+  .problemCard h3{font-size:15.5px;margin-bottom:6px}
+  .problemCard p{font-size:14px;margin:0}
+
+  /* ---- features ---- */
+  .featGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+  @media (max-width:980px){ .featGrid{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:640px){ .featGrid{grid-template-columns:1fr} }
+  .feat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:26px;
+    transition:transform var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease)}
+  .feat:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .feat .ic{width:42px;height:42px;border-radius:10px;background:color-mix(in srgb, var(--accent) 12%, transparent);
+    display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+  .feat .ic svg{width:22px;height:22px;color:var(--accent)}
+  .feat h3{font-size:16.5px;margin-bottom:8px}
+  .feat p{font-size:14.5px;margin:0}
+
+  /* ---- SPC showcase ---- */
+  .showcase{display:grid;grid-template-columns:.9fr 1.1fr;gap:48px;align-items:center}
+  @media (max-width:940px){ .showcase{grid-template-columns:1fr} }
+  .showcase h2{font-size:clamp(22px,2.8vw,30px)}
+  .checklist{list-style:none;padding:0;margin:22px 0 0}
+  .checklist li{display:flex;gap:10px;align-items:flex-start;margin-bottom:12px;font-size:14.5px;color:var(--slate)}
+  @media (prefers-color-scheme:dark){ .checklist li{color:var(--muted)} }
+  .checklist svg{width:18px;height:18px;color:var(--good);flex:0 0 auto;margin-top:2px}
+
+  /* ---- editions ---- */
+  .editionGrid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  @media (max-width:820px){ .editionGrid{grid-template-columns:1fr} }
+  .editionCard{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;position:relative}
+  .editionCard.pop{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent), var(--shadow)}
+  .editionCard .tag{position:absolute;top:-13px;left:28px;background:var(--accent);color:#fff;font-size:11.5px;
+    font-weight:700;padding:4px 12px;border-radius:20px;letter-spacing:.03em}
+  .editionCard h3{font-size:21px;margin-bottom:6px}
+  .editionCard .sub{font-size:14px;color:var(--muted);margin-bottom:20px}
+  .editionCard ul{list-style:none;padding:0;margin:0 0 24px}
+  .editionCard li{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--border);font-size:14px}
+  .editionCard li:first-child{border-top:none}
+  .editionCard svg{width:17px;height:17px;color:var(--good);flex:0 0 auto;margin-top:2px}
+  .editionCard svg.x{color:var(--muted)}
+
+  /* ---- industries ---- */
+  .indGrid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  @media (max-width:720px){ .indGrid{grid-template-columns:1fr} }
+  .indCard{background:var(--navy);color:#EAF0FA;border-radius:16px;padding:30px;position:relative;overflow:hidden}
+  .indCard::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 200px at 90% -20%, rgba(56,189,248,.18), transparent)}
+  .indCard h3{font-size:19px;position:relative}
+  .indCard p{color:#93A3BE;position:relative;font-size:14.5px}
+  .indCard .tags{display:flex;flex-wrap:wrap;gap:8px;position:relative}
+  .indCard .tags span{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);font-size:12.5px;
+    padding:5px 11px;border-radius:20px}
+
+  /* ---- download ---- */
+  .dlGrid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  @media (max-width:820px){ .dlGrid{grid-template-columns:1fr} }
+  .dlCard{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px}
+  .dlCard h3{font-size:18px;margin-bottom:4px}
+  .dlCard .ver{font-size:13px;color:var(--muted);margin-bottom:18px}
+  .dlCard .ver .mono{color:var(--accent-2)}
+  .osNote{font-size:12.5px;color:var(--muted);margin-top:12px}
+
+  /* ---- contact ---- */
+  .contactCard{background:var(--navy);border-radius:20px;padding:52px;text-align:center;color:#fff}
+  .contactCard h2{color:#fff}
+  .contactCard p{color:#93A3BE;max-width:52ch;margin:0 auto 28px}
+  .contactCard .ctaRow{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+
+  footer{border-top:1px solid var(--border);padding:36px 0;font-size:13px;color:var(--muted)}
+  .footRow{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+
+  /* scroll reveal */
+  .rv{opacity:0;transform:translateY(14px);transition:opacity .5s var(--ease), transform .5s var(--ease)}
+  .rv.in{opacity:1;transform:none}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <a class="brand" href="#top">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.8"/></svg></span>
+      Production Command Center
+    </a>
+    <nav class="navlinks" id="navlinks">
+      <a href="#features">Features</a>
+      <a href="#spc">Quality &amp; SPC</a>
+      <a href="#editions">Editions</a>
+      <a href="#industries">Industries</a>
+      <a href="#download">Download</a>
+      <a href="#contact">Contact</a>
+    </nav>
+    <div class="navRight">
+      <a class="btn btn-primary" href="#contact">Request a demo</a>
+      <button class="navToggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="wrap heroGrid">
+      <div>
+        <div class="eyebrow">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M3 12h4l3-8 4 16 3-8h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Shop-floor ERP for press shops &amp; CNC
+        </div>
+        <h1>Run your shop floor without the guesswork.</h1>
+        <p class="lede">Production Command Center tracks orders, machines, quality and packing in one system — built to keep working even when the internet doesn't. No paper travelers, no end-of-day guessing on what actually got made.</p>
+        <div class="ctaRow">
+          <a class="btn btn-primary" href="#contact">Request a demo</a>
+          <a class="btn btn-ghost" href="#download">Download &amp; try it</a>
+        </div>
+        <div class="trustRow">
+          <span class="item"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Works fully offline</span>
+          <span class="item"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Press shop &amp; CNC editions</span>
+          <span class="item"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>No installation lock-in</span>
+        </div>
+      </div>
+
+      <!-- recreated product panel: same layout/numbers as the real dashboard, drawn in CSS -->
+      <div class="panelShell rv">
+        <div class="panelInner">
+          <div class="panelChrome"><i></i><i></i><i></i></div>
+          <div class="kpiGrid">
+            <div class="kpiCard"><div class="k">Open Orders</div><div class="v">3</div><div class="h">0 done</div></div>
+            <div class="kpiCard"><div class="k">Active Machines</div><div class="v">3<span style="color:#64748B;font-size:14px"> / 5</span></div><div class="h">running now</div></div>
+            <div class="kpiCard"><div class="k">Output Progress</div><div class="v good">40%</div><div class="h">11,274 / 28,000 units</div></div>
+          </div>
+          <div class="spcMini">
+            <div class="row1"><span class="badge-cap">CAPABLE</span><span class="lbl">Cut length · Clevis Hanger 3&quot;</span></div>
+            <div class="spcStats">
+              <div><div class="k">Cpk</div><div class="v" style="color:#4ADE80">1.67</div></div>
+              <div><div class="k">Cp</div><div class="v">1.94</div></div>
+              <div><div class="k">Ppk</div><div class="v">1.68</div></div>
+              <div><div class="k">Subgroups</div><div class="v">24</div></div>
+            </div>
+            <div class="miniChart">
+              <svg viewBox="0 0 300 46" preserveAspectRatio="none">
+                <line x1="0" y1="8" x2="300" y2="8" stroke="#F87171" stroke-dasharray="3,3" stroke-width="1"/>
+                <line x1="0" y1="23" x2="300" y2="23" stroke="#38BDF8" stroke-width="1"/>
+                <line x1="0" y1="38" x2="300" y2="38" stroke="#F87171" stroke-dasharray="3,3" stroke-width="1"/>
+                <polyline points="0,25 25,20 50,24 75,18 100,21 125,16 150,19 175,14 200,17 225,12 250,15 275,10 300,13" fill="none" stroke="#EAF0FA" stroke-width="1.6"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PROBLEM ============ -->
+  <section>
+    <div class="wrap">
+      <div class="secHead rv">
+        <h2>The shop floor already knows what's wrong. It just isn't written down anywhere.</h2>
+        <p>Most shops run on memory, WhatsApp messages, and a supervisor's notebook. It works — until it doesn't.</p>
+      </div>
+      <div class="problemGrid">
+        <div class="problemCard rv">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L14.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <h3>No real-time visibility</h3>
+          <p>You find out a machine's been idle for two hours only when someone mentions it at the end of the shift.</p>
+        </div>
+        <div class="problemCard rv">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L14.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <h3>Quality data nobody trusts</h3>
+          <p>Inspection sheets exist, but no one can tell you if a dimension is drifting until a customer complains.</p>
+        </div>
+        <div class="problemCard rv">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L14.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <h3>Slow jobs, no easy fix</h3>
+          <p>A big batch sits on one machine for days while two others stand free, because splitting it means redoing paperwork.</p>
+        </div>
+        <div class="problemCard rv">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L14.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <h3>Software that needs the internet</h3>
+          <p>Cloud-only ERPs stop working the moment your connection does — on a shop floor, that's every other week.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
+  <section id="features" style="background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+    <div class="wrap">
+      <div class="secHead rv">
+        <div class="eyebrow" style="justify-content:center;display:flex"><span>What's inside</span></div>
+        <h2>Everything from order intake to dispatch, in one place</h2>
+        <p>Built directly from real press-shop and CNC workflows — not adapted from a generic template.</p>
+      </div>
+      <div class="featGrid">
+        <div class="feat rv">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M7 15l4-5 3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h3>Live production &amp; OEE</h3>
+          <p>Every machine, every job, tracked in real time — availability, performance and quality rolled into one honest OEE number.</p>
+        </div>
+        <div class="feat rv">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h3>QC inspection plans</h3>
+          <p>Define exactly what to measure per item and stage. Mark dimensions Critical — a failure there is a hard reject, no exceptions.</p>
+        </div>
+        <div class="feat rv">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M7 16l3-3 3 2 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18" cy="7" r="2" stroke="currentColor" stroke-width="1.8"/></svg></div>
+          <h3>Process capability (SPC)</h3>
+          <p>Cp/Cpk, control charts and a printable capability study — generated automatically from inspections you're already doing.</p>
+        </div>
+        <div class="feat rv">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 6l2 14h12l2-14M9 10v6M15 10v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h3>Configurable documents</h3>
+          <p>Delivery challans and packing lists with the columns you actually need — HSN, box-wise net/gross weight, marks &amp; numbers.</p>
+        </div>
+        <div class="feat rv">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20V10M4 10l8-6 8 6M4 10h16M12 20V4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h3>Split a job across machines</h3>
+          <p>Run one big batch on several machines at once — with an honest estimate of whether it's actually faster before you commit.</p>
+        </div>
+        <div class="feat rv">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M12.5 3.5a4 4 0 010 7.75M23 21v-2a4 4 0 00-3-3.87M9 11a4 4 0 100-8 4 4 0 000 8z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h3>Team accounts &amp; security</h3>
+          <p>Each person signs in as themselves, restricted to their own department. A one-click self-test proves the isolation actually holds.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SPC SHOWCASE ============ -->
+  <section id="spc">
+    <div class="wrap showcase">
+      <div class="rv">
+        <div class="eyebrow"><svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M7 16l3-3 3 2 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Quality that holds up to an audit</div>
+        <h2>Turn inspections you already record into evidence a customer will accept.</h2>
+        <p>No separate data entry. Every inspection your QC team logs feeds straight into a capability study — the kind of document that used to need a consultant.</p>
+        <ul class="checklist">
+          <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Cp / Cpk / Pp / Ppk calculated automatically, per item and dimension</li>
+          <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>X&#772; and R control charts flag drift before it becomes a rejection</li>
+          <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Honest by design — fewer than 20 inspections is marked "indicative only," never overstated</li>
+          <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>One click prints a customer- and auditor-ready capability report</li>
+        </ul>
+      </div>
+      <div class="panelShell rv">
+        <div class="panelInner">
+          <div class="panelChrome"><i></i><i></i><i></i></div>
+          <div class="spcMini" style="margin-bottom:0">
+            <div class="row1"><span class="badge-cap">CAPABLE</span><span class="lbl">Meets the usual customer requirement (Cpk &ge; 1.33)</span></div>
+            <div class="spcStats">
+              <div><div class="k">Cpk</div><div class="v" style="color:#4ADE80">1.67</div></div>
+              <div><div class="k">Cp</div><div class="v">1.94</div></div>
+              <div><div class="k">Ppk</div><div class="v">1.68</div></div>
+              <div><div class="k">Spec</div><div class="v" style="font-size:13px">75 &plusmn;0.5</div></div>
+            </div>
+            <div class="miniChart" style="height:70px">
+              <svg viewBox="0 0 300 70" preserveAspectRatio="none">
+                <line x1="0" y1="10" x2="300" y2="10" stroke="#F87171" stroke-dasharray="3,3" stroke-width="1"/>
+                <line x1="0" y1="35" x2="300" y2="35" stroke="#38BDF8" stroke-width="1"/>
+                <line x1="0" y1="60" x2="300" y2="60" stroke="#F87171" stroke-dasharray="3,3" stroke-width="1"/>
+                <polyline points="0,38 20,32 40,37 60,28 80,33 100,24 120,30 140,20 160,27 180,17 200,24 220,14 240,22 260,11 280,20 300,15" fill="none" stroke="#EAF0FA" stroke-width="1.6"/>
+                <circle cx="280" cy="20" r="3" fill="#4ADE80"/>
+              </svg>
+            </div>
+            <div style="font-size:11px;color:#64748B;margin-top:10px">24 subgroups · 120 readings · &sigma; within = 0.0861</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ EDITIONS ============ -->
+  <section id="editions" style="background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+    <div class="wrap">
+      <div class="secHead rv">
+        <div class="eyebrow" style="justify-content:center;display:flex"><span>Choose your edition</span></div>
+        <h2>One product, two ways to run it</h2>
+        <p>Same features either way — the difference is how your team signs in.</p>
+      </div>
+      <div class="editionGrid">
+        <div class="editionCard rv">
+          <h3>Standard</h3>
+          <div class="sub">Works fully offline — the whole shop runs on one PC if that's how you work today.</div>
+          <ul>
+            <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>No internet required</li>
+            <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Department login + optional passwords</li>
+            <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>All modules: production, QC, SPC, dispatch</li>
+            <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Data lives on your own PC</li>
+            <li><svg class="x" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>No per-person cloud accounts</li>
+          </ul>
+          <a class="btn btn-ghost" style="width:100%" href="#download">Download Standard</a>
+        </div>
+        <div class="editionCard pop rv">
+          <span class="tag">For growing teams</span>
+          <h3>Enterprise</h3>
+          <div class="sub">Every person signs in with their own account, from any of their own devices.</div>
+          <ul>
+            <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Per-person email logins (Google or email/password)</li>
+            <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Management assigns each person's department</li>
+            <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Data syncs live across every device</li>
+            <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Built-in security self-test, run any time</li>
+            <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Needs an internet connection</li>
+          </ul>
+          <a class="btn btn-primary" style="width:100%" href="#download">Download Enterprise</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ INDUSTRIES ============ -->
+  <section id="industries">
+    <div class="wrap">
+      <div class="secHead rv">
+        <div class="eyebrow" style="justify-content:center;display:flex"><span>Built for your process</span></div>
+        <h2>Two variants, tuned to how you actually work</h2>
+      </div>
+      <div class="indGrid">
+        <div class="indCard rv">
+          <h3>Press Shop</h3>
+          <p>Cutting, bending, plating and fitting — with branching routes for parts that go one way or another after forming, and a fastener gate that stops Fitting from moving without Stores' sign-off.</p>
+          <div class="tags"><span>Blanking &amp; forming</span><span>Electroplating</span><span>Fastener control</span><span>Assembly</span></div>
+        </div>
+        <div class="indCard rv">
+          <h3>CNC Job Shop</h3>
+          <p>Job-wise machine assignment, tool-life tracking, and the same QC/SPC engine — tuned for turned and machined components rather than sheet metal.</p>
+          <div class="tags"><span>Turning &amp; milling</span><span>Tool-life tracking</span><span>Job costing</span><span>Multi-op routing</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DOWNLOAD ============ -->
+  <section id="download" style="background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+    <div class="wrap">
+      <div class="secHead rv">
+        <div class="eyebrow" style="justify-content:center;display:flex"><span>Try it yourself</span></div>
+        <h2>Download for Windows</h2>
+        <p>Every download is licence-locked — you'll need a key from us to activate it. <a href="#contact" style="color:var(--accent);text-decoration:underline">Request one here</a>.</p>
+      </div>
+      <div class="dlGrid">
+        <div class="dlCard rv">
+          <h3>Production Command Center</h3>
+          <div class="ver" data-repo="pcc-releases">Standard edition · <span class="mono">checking latest version…</span></div>
+          <a class="btn btn-dark" style="width:100%" data-dl="pcc-releases" href="https://github.com/brucebatman11095-cell/pcc-releases/releases/latest">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Download Standard
+          </a>
+          <div class="osNote">Windows 10/11 · 64-bit · installer, no admin rights needed</div>
+        </div>
+        <div class="dlCard rv">
+          <h3>Production Command Center Enterprise</h3>
+          <div class="ver" data-repo="pcc-enterprise-releases">Enterprise edition · <span class="mono">checking latest version…</span></div>
+          <a class="btn btn-dark" style="width:100%" data-dl="pcc-enterprise-releases" href="https://github.com/brucebatman11095-cell/pcc-enterprise-releases/releases/latest">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Download Enterprise
+          </a>
+          <div class="osNote">Windows 10/11 · 64-bit · requires internet + a work email</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONTACT ============ -->
+  <section id="contact">
+    <div class="wrap">
+      <div class="contactCard rv">
+        <h2>Let's set up your shop floor.</h2>
+        <p>Tell us a bit about your process — press shop or CNC, how many machines, how many people — and we'll set you up with the right edition and a licence key.</p>
+        <div class="ctaRow">
+          <a class="btn btn-primary" href="mailto:bruce.batman11095@gmail.com?subject=Production%20Command%20Center%20-%20Demo%20request">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4V4zm0 0l8 7 8-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            bruce.batman11095@gmail.com
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footRow">
+    <div>© <span id="yr"></span> Tembo Global Industries Ltd. — Production Command Center</div>
+    <div>Made for press shops &amp; CNC job shops in India</div>
+  </div>
+</footer>
+
+<script>
+document.getElementById("yr").textContent = new Date().getFullYear();
+
+// mobile nav toggle
+var navToggle = document.getElementById("navToggle");
+navToggle.addEventListener("click", function(){
+  var open = document.body.classList.toggle("navOpen");
+  navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+});
+document.querySelectorAll("#navlinks a").forEach(function(a){
+  a.addEventListener("click", function(){ document.body.classList.remove("navOpen"); });
+});
+
+// scroll reveal — respects prefers-reduced-motion via the CSS rule above disabling transitions
+if ("IntersectionObserver" in window) {
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll(".rv").forEach(function(el){ io.observe(el); });
+} else {
+  document.querySelectorAll(".rv").forEach(function(el){ el.classList.add("in"); });
+}
+
+// Download buttons: the href ALWAYS works on its own (links straight to the releases page).
+// This just enhances it — if the public GitHub API answers, point directly at the newest .exe
+// and show the version/size. If it fails (rate limit, offline), the page still works exactly
+// as if this script never ran.
+function enhanceDownload(repo) {
+  var verEl = document.querySelector('.ver[data-repo="' + repo + '"] .mono');
+  var btn = document.querySelector('[data-dl="' + repo + '"]');
+  fetch("https://api.github.com/repos/brucebatman11095-cell/" + repo + "/releases/latest")
+    .then(function(r){ if (!r.ok) throw new Error("http " + r.status); return r.json(); })
+    .then(function(rel){
+      var asset = (rel.assets || []).find(function(a){ return /\.exe$/i.test(a.name); });
+      if (verEl) verEl.textContent = "v" + (rel.tag_name || "").replace(/^v/, "") +
+        (asset ? " · " + (asset.size / 1e6).toFixed(0) + " MB" : "");
+      if (asset && btn) btn.href = asset.browser_download_url;
+    })
+    .catch(function(){ if (verEl) verEl.textContent = "see latest release"; });
+}
+enhanceDownload("pcc-releases");
+enhanceDownload("pcc-enterprise-releases");
+</script>
+</body>
+</html>
