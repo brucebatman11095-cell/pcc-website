@@ -1093,8 +1093,10 @@ if (!reduced && "IntersectionObserver" in window) {
     // rather than by recomputing them on the mesh, which would be far too slow every frame.
     var seaTimeUniforms = [];
     (function buildSea(){
-      var from = stageX[6] + SPACING*0.5, to = stageX[7] + SPACING*3, w = to - from;
-      var geo = new THREE.PlaneGeometry(w, 90, Math.max(24, Math.round(w/1.6)), 60);
+      // Runs far past the ship in every direction so no water edge is ever in frame —
+      // the ship should read as being out at sea, not floating on a visible slab.
+      var from = stageX[6] + SPACING*0.5, to = stageX[7] + SPACING*14, w = to - from;
+      var geo = new THREE.PlaneGeometry(w, 300, Math.max(40, Math.round(w/2.2)), 90);
       var m = new THREE.MeshStandardMaterial({color: SEA, roughness: 0.22, metalness: 0.15});
       m.onBeforeCompile = function(shader){
         shader.uniforms.uTime = {value: 0};
@@ -1215,8 +1217,10 @@ if (!reduced && "IntersectionObserver" in window) {
         var ctr = new THREE.Vector3(); bb.getCenter(ctr);
         // distance that fits the stage's height and depth in a 42° vertical FOV, with headroom
         var extent = Math.max(s.y, s.z * 0.6, 3);
-        frameDist[i] = Math.min(26, Math.max(9, extent * 2.35 + 4));
-        frameY[i]    = Math.min(4.5, Math.max(1.1, ctr.y * 0.75));
+        // pulled in tighter than the first pass — the machines were sitting too far away
+        // to read, especially the smaller stations
+        frameDist[i] = Math.min(21, Math.max(7, extent * 1.85 + 2.6));
+        frameY[i]    = Math.min(4.2, Math.max(1.0, ctr.y * 0.72));
       });
     }
     function lerpAtX(arr, x){
