@@ -247,6 +247,24 @@
     .c-wide,.c-half,.c-third,.c-feature{grid-column:span 1} }
   @media (max-width:600px){ .bento{grid-template-columns:1fr} .card{padding:26px} }
 
+  /* ---------- photoreal render gallery ---------- */
+  .shots{max-width:1080px;margin:0 auto}
+  .shotMain{position:relative;border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--sh-lg);
+    background:var(--ink);aspect-ratio:16/9}
+  .shotMain img{display:block;width:100%;height:100%;object-fit:cover;
+    transition:opacity .25s var(--ease)}
+  .shotMain img.swap{opacity:0}
+  .shotCap{position:absolute;left:0;right:0;bottom:0;padding:34px 26px 16px;color:#fff;
+    font-size:14.5px;font-weight:500;pointer-events:none;
+    background:linear-gradient(transparent, rgba(12,10,9,.72))}
+  .shotThumbs{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:12px}
+  @media (max-width:760px){ .shotThumbs{grid-template-columns:repeat(3,1fr)} }
+  .shotThumbs button{padding:0;border:2px solid transparent;border-radius:9px;overflow:hidden;
+    cursor:pointer;background:none;line-height:0;transition:border-color var(--t) var(--ease), transform var(--t) var(--ease)}
+  .shotThumbs button:hover{transform:translateY(-2px)}
+  .shotThumbs button[aria-current="true"]{border-color:var(--rust)}
+  .shotThumbs img{width:100%;height:auto;display:block;aspect-ratio:16/9;object-fit:cover}
+
   /* ---------- journey ----------
      .journeyFallback is the REAL content — plain SVG icons, always in the HTML, always
      readable with zero JS or an old GPU. .journeyWrap stays display:none until a script
@@ -400,6 +418,7 @@
     <nav class="navlinks" id="navlinks">
       <a href="#story">Story</a>
       <a href="#features">Features</a>
+      <a href="#shopfloor">Shop floor</a>
       <a href="#journey">Journey</a>
       <a href="#screens">Screens</a>
       <a href="#quality">Quality</a>
@@ -542,6 +561,25 @@
           <h3>Nothing stops when the line drops</h3>
           <p>The Standard edition holds everything on your own PC and never needs a connection. No cloud outage, no expired subscription server, no "please check your internet" in the middle of a shift.</p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== PHOTOREAL RENDERS ===== -->
+  <section id="shopfloor" style="background:var(--paper-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+    <div class="wrap">
+      <div class="head rv">
+        <div class="kicker">The shop floor</div>
+        <h2>Built around how the work actually moves</h2>
+        <p>Press, coating, assembly, inspection, packing, dispatch — the software follows the same route your parts do.</p>
+      </div>
+      <div class="shots rv">
+        <div class="shotMain">
+          <img id="renderImg" src="assets/renders/factory_wide.webp" width="1600" height="900" loading="lazy"
+               alt="A press shop interior: painted floor lanes, high-bay lighting, pallet racking, a power press and a CNC turning centre">
+          <div class="shotCap" id="renderCap">The shop floor — every machine, order and inspection tracked in one system</div>
+        </div>
+        <div class="shotThumbs" id="renderThumbs" role="tablist" aria-label="Shop floor views"></div>
       </div>
     </div>
   </section>
@@ -913,6 +951,48 @@ if (!reduced && "IntersectionObserver" in window) {
   document.querySelectorAll(".cnt").forEach(function(el){ cntIo.observe(el); });
 }
 
+/* ---- photoreal render gallery -------------------------------------------------
+   Thumbnails are built in JS from one list, so the markup can't drift out of sync with
+   the captions. The main image is a real <img> in the HTML, so the section still shows
+   something meaningful before this runs (or if it never does). */
+(function(){
+  var RENDERS = [
+    ["factory_wide",  "The shop floor — every machine, order and inspection tracked in one system"],
+    ["press_hero",    "Power press with the die set, guarding and controls an operator actually uses"],
+    ["assembly_hero", "Assembly bench: fixtures, fastener bins, torque tools and work instructions"],
+    ["qc_hero",       "Inspection: micrometer, dial indicator and gauge blocks on a granite plate"],
+    ["dock_open",     "Loading dock — packed, checked and loaded straight from the floor"],
+    ["ship_hero",     "Export: the same order, tracked all the way to the customer's port"]
+  ];
+  var img = document.getElementById("renderImg"),
+      cap = document.getElementById("renderCap"),
+      bar = document.getElementById("renderThumbs");
+  if (!img || !bar) return;
+
+  RENDERS.forEach(function(r, i){
+    var b = document.createElement("button");
+    b.type = "button"; b.setAttribute("role","tab");
+    b.setAttribute("aria-current", i === 0 ? "true" : "false");
+    b.setAttribute("aria-label", r[1]);
+    var t = document.createElement("img");
+    t.src = "assets/renders/" + r[0] + ".webp"; t.alt = ""; t.loading = "lazy";
+    t.width = 1600; t.height = 900;
+    b.appendChild(t);
+    b.addEventListener("click", function(){
+      if (b.getAttribute("aria-current") === "true") return;
+      bar.querySelectorAll("button").forEach(function(x){ x.setAttribute("aria-current","false"); });
+      b.setAttribute("aria-current","true");
+      img.classList.add("swap");
+      setTimeout(function(){
+        img.src = "assets/renders/" + r[0] + ".webp";
+        img.alt = r[1]; cap.textContent = r[1];
+        img.classList.remove("swap");
+      }, reduced ? 0 : 200);
+    });
+    bar.appendChild(b);
+  });
+})();
+
 /* ---- Journey: 3D scroll-driven manufacturing scene (progressive enhancement) --------------
    #journeyFallback (plain SVG strip) is the REAL content — always in the HTML, always readable
    with zero JS or an old GPU. This block only swaps it for the 3D scene when WebGL genuinely
@@ -934,11 +1014,12 @@ if (!reduced && "IntersectionObserver" in window) {
 
   Promise.all([
     import("three"),
-    import("three/addons/loaders/GLTFLoader.js")
-  ]).then(function(mods){ boot(mods[0], mods[1].GLTFLoader); })
+    import("three/addons/loaders/GLTFLoader.js"),
+    import("three/addons/environments/RoomEnvironment.js")
+  ]).then(function(mods){ boot(mods[0], mods[1].GLTFLoader, mods[2].RoomEnvironment); })
     .catch(function(){ /* offline or CDN blocked — the fallback strip is already showing */ });
 
-  function boot(THREE, GLTFLoader){
+  function boot(THREE, GLTFLoader, RoomEnvironment){
     wrap.classList.add("active");
 
     var STAGES = ["Sheet & bar stock","Press & CNC work","Coating","Assembly","Quality check","Packing","Dispatch","Export"];
@@ -947,6 +1028,15 @@ if (!reduced && "IntersectionObserver" in window) {
 
     var renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true});
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+    // Filmic tone mapping + sRGB output. Without these, physically-lit metal clips to flat
+    // white and the whole scene reads washed-out and "CG-primitive".
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Soft shadows: the single biggest cue that objects are SITTING on the floor rather
+    // than floating above it.
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     // Neutral steel-grey environment — real machine shops are bright and light, and the
     // machines themselves are white/grey, so a warm brown backdrop made everything muddy.
@@ -957,12 +1047,28 @@ if (!reduced && "IntersectionObserver" in window) {
 
     var camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
 
-    // Bright, near-neutral shop lighting — the fluorescent look of the reference photos
-    scene.add(new THREE.HemisphereLight(0xFFFFFF, 0x6E7378, 1.55));
-    var sun = new THREE.DirectionalLight(0xFFFAF0, 1.55);
-    sun.position.set(12, 24, 14);
+    // ---- image-based lighting -------------------------------------------------
+    // THE key realism fix. Metal only looks like metal when it has something to reflect;
+    // with lights alone, chrome and steel render as flat grey plastic. RoomEnvironment is
+    // generated procedurally inside three.js, so this costs ZERO extra download.
+    var pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+    scene.add(new THREE.HemisphereLight(0xFFFFFF, 0x76797E, 0.85));
+    var sun = new THREE.DirectionalLight(0xFFF6E6, 1.6);
+    sun.position.set(14, 26, 16);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.bias = -0.0012;
+    sun.shadow.normalBias = 0.02;
+    // The scene is ~130 units long, so one shadow map cannot cover it at usable resolution.
+    // The shadow camera is kept small and moved to follow the viewer (see applyProgress).
+    var sc = sun.shadow.camera;
+    sc.left = -22; sc.right = 22; sc.top = 22; sc.bottom = -22; sc.near = 1; sc.far = 90;
+    sc.updateProjectionMatrix();
     scene.add(sun);
-    var fill = new THREE.DirectionalLight(0xD6E4F0, 0.7);    // cool fill so shadowed sides stay readable
+    scene.add(sun.target);
+    var fill = new THREE.DirectionalLight(0xD6E4F0, 0.45);
     fill.position.set(-14, 10, -10);
     scene.add(fill);
 
@@ -977,9 +1083,45 @@ if (!reduced && "IntersectionObserver" in window) {
       g.rotation.x = -Math.PI/2; g.position.set(from + w/2, 0, 4);
       scene.add(g);
     }
-    addGround(-10, stageX[4] + SPACING*0.5, FLOOR);
-    addGround(stageX[4] + SPACING*0.5, stageX[6] + SPACING*0.5, DOCK);
-    addGround(stageX[6] + SPACING*0.5, stageX[7] + SPACING*3, SEA);
+    // The factory slab now comes from the model itself (assets/journey.glb), so only the
+    // outdoor ground is built here — adding a plane under the building too would z-fight.
+    addGround(stageX[5] + SPACING*0.5, stageX[6] + SPACING*0.5, DOCK);
+
+    // ---- moving sea ------------------------------------------------------------
+    // Waves are displaced in the VERTEX SHADER, so the CPU does no per-frame work at all and
+    // the normals are derived analytically (the exact derivative of the height function)
+    // rather than by recomputing them on the mesh, which would be far too slow every frame.
+    var seaTimeUniforms = [];
+    (function buildSea(){
+      var from = stageX[6] + SPACING*0.5, to = stageX[7] + SPACING*3, w = to - from;
+      var geo = new THREE.PlaneGeometry(w, 90, Math.max(24, Math.round(w/1.6)), 60);
+      var m = new THREE.MeshStandardMaterial({color: SEA, roughness: 0.22, metalness: 0.15});
+      m.onBeforeCompile = function(shader){
+        shader.uniforms.uTime = {value: 0};
+        seaTimeUniforms.push(shader.uniforms.uTime);
+        var WAVE = [
+          "float A1=0.13, K1=0.42, S1=1.05;",
+          "float A2=0.09, K2=0.61, S2=0.83;",
+          "float A3=0.06, K3=0.27, S3=0.61;",
+          "float p1 = position.x*K1 + uTime*S1;",
+          "float p2 = position.y*K2 - uTime*S2;",
+          "float p3 = (position.x+position.y)*K3 + uTime*S3;",
+          "float h  = sin(p1)*A1 + sin(p2)*A2 + sin(p3)*A3;",
+          "float dx = cos(p1)*A1*K1 + cos(p3)*A3*K3;",
+          "float dy = cos(p2)*A2*K2 + cos(p3)*A3*K3;"
+        ].join("\n");
+        shader.vertexShader = "uniform float uTime;\n" + shader.vertexShader
+          .replace("#include <beginnormal_vertex>",
+                   WAVE + "\nvec3 objectNormal = normalize(vec3(-dx, -dy, 1.0));")
+          .replace("#include <begin_vertex>",
+                   "vec3 transformed = vec3(position.x, position.y, position.z + h);");
+      };
+      var sea = new THREE.Mesh(geo, m);
+      sea.rotation.x = -Math.PI/2;
+      sea.position.set(from + w/2, 0, 4);
+      sea.receiveShadow = true;
+      scene.add(sea);
+    })();
 
     var anims = []; // idle-animation callbacks, run every frame with elapsed seconds
 
@@ -989,8 +1131,17 @@ if (!reduced && "IntersectionObserver" in window) {
     new GLTFLoader().load("assets/journey.glb", function(gltf){
       var root = gltf.scene;
       root.traverse(function(o){
-        if (o.isMesh){ o.castShadow = false; o.receiveShadow = false;
-          if (o.material){ o.material.flatShading = false; o.material.needsUpdate = true; } }
+        if (!o.isMesh) return;
+        var n = o.name.toLowerCase();
+        // Big flat surfaces only RECEIVE shadow — letting the floor/roof cast as well
+        // just produces acne and eats the shadow map's resolution budget.
+        var flat = /^(fac_floor|roof_|skylite|wall_|lane_|hatch_|guard_)/.test(n);
+        o.castShadow = !flat;
+        o.receiveShadow = true;
+        if (o.material){
+          o.material.envMapIntensity = 1.0;
+          o.material.needsUpdate = true;
+        }
       });
       scene.add(root);
       fallback.style.display = "none";   // only now that the machines are actually on screen
@@ -1000,17 +1151,26 @@ if (!reduced && "IntersectionObserver" in window) {
       // find a few named parts to animate; names come straight from the Blender build
       function find(n){ return root.getObjectByName(n); }
       var ram = find("ram"), fly = find("flywheel"), chuck = find("cnc_chuck");
-      var ring = find("qc_ok"), wheels = [];
-      root.traverse(function(o){ if (/^w_(steer|drv1|drv2|trl1|trl2)_-?1$/.test(o.name)) wheels.push(o); });
-      var ship = find("hull_mid");
+      var hull = find("hull"), boot = find("boot");
 
+      // Only things that would ACTUALLY be moving get animated. The truck is parked at the
+      // loading dock, so its wheels must stay still — spinning them while it sits there was
+      // the single most obviously wrong thing in the scene.
       if (ram){ var ramY = ram.position.y;
         anims.push(function(t){ ram.position.y = ramY + Math.abs(Math.sin(t*1.5))*0.55; }); }
-      if (fly) anims.push(function(t){ fly.rotation.x = t*2.2; });
+      if (fly)   anims.push(function(t){ fly.rotation.x = t*2.2; });
       if (chuck) anims.push(function(t){ chuck.rotation.x = t*4.0; });
-      if (wheels.length) anims.push(function(t){ wheels.forEach(function(w){ w.rotation.x = t*3; }); });
-      if (ship){ var sy = ship.position.y;
-        anims.push(function(t){ root.position.y = Math.sin(t*0.7)*0.05; }); }
+
+      // the ship rides the swell: gentle heave + roll, matched to the sea's wave period
+      if (hull){
+        var parts = [hull, boot].concat([]);
+        root.traverse(function(o){ if (/^(cont_|lash_|house|bridge|funnel|mast|wing_|hatch|winch_|bow_rail|acc_ladder|bulb)/.test(o.name)) parts.push(o); });
+        var base = parts.map(function(o){ return {o:o, y:o.position.y, rz:o.rotation.z}; });
+        anims.push(function(t){
+          var heave = Math.sin(t*0.55)*0.10, roll = Math.sin(t*0.42)*0.016;
+          base.forEach(function(b){ if(!b.o) return; b.o.position.y = b.y + heave; b.o.rotation.z = b.rz + roll; });
+        });
+      }
     }, undefined, function(){
       // model failed to load — keep the scene but restore the plain SVG strip so the
       // section still communicates the eight stages rather than showing an empty floor
@@ -1087,6 +1247,10 @@ if (!reduced && "IntersectionObserver" in window) {
       var dist = lerpAtX(frameDist, x), ly = lerpAtX(frameY, x);
       camera.position.set(x, CAM_Y + dist*0.20, dist);
       camera.lookAt(x + LOOK_AHEAD, ly, 0);
+      // keep the (deliberately small) shadow frustum centred on whatever we're looking at
+      sun.position.set(x + 14, 26, 16);
+      sun.target.position.set(x + 2, 0, 0);
+      sun.target.updateMatrixWorld();
       // label tracks whichever stage the camera is actually nearest to, NOT a naive fraction
       // of progress — the two drift apart because START_X/END_X pad past stage 0 and stage 7.
       var idx = nearestStageIdx(x);
@@ -1111,6 +1275,7 @@ if (!reduced && "IntersectionObserver" in window) {
       requestAnimationFrame(loop);
       if (!active) return;
       var t = clock.getElapsedTime();
+      for (var si = 0; si < seaTimeUniforms.length; si++) seaTimeUniforms[si].value = t;
       anims.forEach(function(fn){ fn(t); });
       renderer.render(scene, camera);
     })();
