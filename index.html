@@ -1024,26 +1024,30 @@ if (!reduced && "IntersectionObserver" in window) {
 
     var STAGES = ["Sheet & bar stock","Press & CNC work","Coating","Assembly","Quality check","Packing","Dispatch","Export"];
     var N = STAGES.length, SPACING = 16;
-    var stageX = STAGES.map(function(_, i){ return i * SPACING; });
+    // Stage spacing is NOT uniform: the ship is 22.8 units long and simply does not fit a
+    // 16-unit slot — at even spacing its stern overlapped the truck and sat on the concrete.
+    // Stage 7 is pushed out so there is real open water between the dock and the vessel.
+    var stageX = [0, 16, 32, 48, 64, 80, 96, 132];
+    var SEA_START = 110;      // waterline: must sit between the dock and the ship's stern (121)
 
     var renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true});
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     // Filmic tone mapping + sRGB output. Without these, physically-lit metal clips to flat
     // white and the whole scene reads washed-out and "CG-primitive".
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 0.82;   // matches the mood of the Cycles stills
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     // Soft shadows: the single biggest cue that objects are SITTING on the floor rather
     // than floating above it.
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    // Neutral steel-grey environment — real machine shops are bright and light, and the
-    // machines themselves are white/grey, so a warm brown backdrop made everything muddy.
-    var BG = 0x8E959B;
+    // Dim, slightly warm haze to match the Cycles stills — the practical fittings and the
+    // low sun should carry the image, not flat ambient. Fog also hides the sea's far edge.
+    var BG = 0x5B5E63;
     var scene = new THREE.Scene();
     scene.background = new THREE.Color(BG);
-    scene.fog = new THREE.Fog(BG, 30, 78);
+    scene.fog = new THREE.Fog(BG, 26, 96);
 
     var camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
 
@@ -1054,9 +1058,10 @@ if (!reduced && "IntersectionObserver" in window) {
     var pmrem = new THREE.PMREMGenerator(renderer);
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
-    scene.add(new THREE.HemisphereLight(0xFFFFFF, 0x76797E, 0.85));
-    var sun = new THREE.DirectionalLight(0xFFF6E6, 1.6);
-    sun.position.set(14, 26, 16);
+    // ambient pulled right down; a low warm key does the shaping, as in the renders
+    scene.add(new THREE.HemisphereLight(0xBFCBD8, 0x3A3B3E, 0.42));
+    var sun = new THREE.DirectionalLight(0xFFD9A8, 2.5);
+    sun.position.set(14, 12, 16);          // low angle -> long raking shadows
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.bias = -0.0012;
@@ -1068,7 +1073,7 @@ if (!reduced && "IntersectionObserver" in window) {
     sc.updateProjectionMatrix();
     scene.add(sun);
     scene.add(sun.target);
-    var fill = new THREE.DirectionalLight(0xD6E4F0, 0.45);
+    var fill = new THREE.DirectionalLight(0xA8C4DE, 0.30);   // cool bounce, keeps shadows readable
     fill.position.set(-14, 10, -10);
     scene.add(fill);
 
@@ -1085,7 +1090,7 @@ if (!reduced && "IntersectionObserver" in window) {
     }
     // The factory slab now comes from the model itself (assets/journey.glb), so only the
     // outdoor ground is built here — adding a plane under the building too would z-fight.
-    addGround(stageX[5] + SPACING*0.5, stageX[6] + SPACING*0.5, DOCK);
+    addGround(stageX[5] + SPACING*0.5, SEA_START, DOCK);
 
     // ---- moving sea ------------------------------------------------------------
     // Waves are displaced in the VERTEX SHADER, so the CPU does no per-frame work at all and
@@ -1095,7 +1100,7 @@ if (!reduced && "IntersectionObserver" in window) {
     (function buildSea(){
       // Runs far past the ship in every direction so no water edge is ever in frame —
       // the ship should read as being out at sea, not floating on a visible slab.
-      var from = stageX[6] + SPACING*0.5, to = stageX[7] + SPACING*14, w = to - from;
+      var from = SEA_START, to = stageX[7] + SPACING*14, w = to - from;
       var geo = new THREE.PlaneGeometry(w, 300, Math.max(40, Math.round(w/2.2)), 90);
       var m = new THREE.MeshStandardMaterial({color: SEA, roughness: 0.22, metalness: 0.15});
       m.onBeforeCompile = function(shader){
@@ -1141,7 +1146,15 @@ if (!reduced && "IntersectionObserver" in window) {
         o.castShadow = !flat;
         o.receiveShadow = true;
         if (o.material){
-          o.material.envMapIntensity = 1.0;
+          o.material.envMapIntensity = 0.85;
+          // Make the fittings and skylights genuinely glow. glTF clamps emissiveFactor to
+          // 0..1, so the strong emission set in Blender arrives dim — push it back up here
+          // or the darker grade just looks underexposed instead of atmospherically lit.
+          if (/^(lamp_lens|skylite)/.test(n)){
+            o.material.emissive = new THREE.Color(/^lamp/.test(n) ? 0xFFE0B0 : 0xCFE2FF);
+            o.material.emissiveIntensity = /^lamp/.test(n) ? 3.2 : 1.6;
+            o.material.toneMapped = true;
+          }
           o.material.needsUpdate = true;
         }
       });
@@ -1224,13 +1237,19 @@ if (!reduced && "IntersectionObserver" in window) {
       });
     }
     function lerpAtX(arr, x){
-      // smooth blend between the two nearest stage settings so the camera eases rather than jumps
-      var f = x / SPACING;
-      var i0 = Math.max(0, Math.min(N-1, Math.floor(f)));
-      var i1 = Math.max(0, Math.min(N-1, i0 + 1));
-      var t  = Math.max(0, Math.min(1, f - i0));
-      t = t*t*(3-2*t);
-      return arr[i0] + (arr[i1] - arr[i0]) * t;
+      // Blend between the two bracketing stages. This walks the real stageX array rather
+      // than dividing by SPACING — the stages are no longer evenly spaced, so the old
+      // x/SPACING shortcut would pick the wrong pair and jump the camera near the ship.
+      if (x <= stageX[0])   return arr[0];
+      if (x >= stageX[N-1]) return arr[N-1];
+      for (var i = 0; i < N-1; i++){
+        if (x >= stageX[i] && x <= stageX[i+1]){
+          var t = (x - stageX[i]) / (stageX[i+1] - stageX[i]);
+          t = t*t*(3-2*t);
+          return arr[i] + (arr[i+1] - arr[i]) * t;
+        }
+      }
+      return arr[N-1];
     }
     var ticking = false;
     function computeProgress(){
