@@ -15,21 +15,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Calistoga&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- First journey frame only. It is the gate: the scroll sequence does not replace the plain
+     SVG fallback strip until this one decodes, so fetching it early is what decides how soon
+     the section becomes the rendered scene. The media queries mirror the 760px breakpoint the
+     journey script uses to pick between the full and phone frame sets. -->
+<link rel="preload" as="image" href="assets/seq2/f01.webp" media="(min-width: 761px)">
+<link rel="preload" as="image" href="assets/seq2/m/f01.webp" media="(max-width: 760px)">
 <script>document.documentElement.className+=" js";</script>
-<!-- Three.js is SELF-HOSTED (assets/vendor), not pulled from a CDN. A CDN would mean a third
-     party can execute arbitrary JavaScript on this site if it is ever compromised or DNS-hijacked,
-     and dynamic import() cannot carry a Subresource-Integrity hash to guard against that. Serving
-     our own copy removes that trust entirely and also keeps the page working if a CDN is blocked.
-     One import map (rather than pre-bundled copies) guarantees a SINGLE three instance — two would
-     break instanceof checks between the loader's output and the scene. -->
-<script type="importmap">
-{
-  "imports": {
-    "three": "./assets/vendor/three.module.js",
-    "three/addons/": "./assets/vendor/"
-  }
-}
-</script>
 <style>
   :root{
     /* warm paper, not clinical white — the whole point of the light theme */
@@ -296,6 +288,22 @@
   .journeyHint.hide{opacity:0}
   .journeyHint svg{width:13px;height:13px;animation:jBounce 1.6s ease-in-out infinite}
   @keyframes jBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}
+  /* On a portrait phone the frame's 16:9 does not fit a 0.46 viewport, and filling it means
+     cropping to a narrow centre slice — the machine and its robot fall outside it entirely.
+     So on phones the frame is letterboxed into a full-width 16:9 strip centred in the pin.
+     This block has to sit AFTER the .journeyLabel/.journeyBarTrack rules above: a media query
+     adds no specificity, so from earlier in the sheet its bottom:auto loses to their bottom
+     values and the label stretches into a tall slab between the two. */
+  @media (max-width:760px){
+    .journeyPin{background:#14110F}
+    /* centred by absolute positioning, not grid place-items, which would stretch the
+       absolutely-positioned label and bar as well */
+    #journeyCanvas{position:absolute;left:0;top:50%;transform:translateY(-50%);
+      width:100%;height:auto;aspect-ratio:1100/620}
+    /* track the strip's lower edge: it is centred, so that edge is 50% + half of 100vw/1.774 */
+    .journeyLabel{bottom:auto;top:calc(50% + 28.2vw + 14px)}
+    .journeyBarTrack{bottom:auto;top:calc(50% + 28.2vw + 58px)}
+  }
 
   /* ---------- screenshots ---------- */
   .tabs{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-bottom:34px}
@@ -993,316 +1001,123 @@ if (!reduced && "IntersectionObserver" in window) {
   });
 })();
 
-/* ---- Journey: 3D scroll-driven manufacturing scene (progressive enhancement) --------------
-   #journeyFallback (plain SVG strip) is the REAL content — always in the HTML, always readable
-   with zero JS or an old GPU. This block only swaps it for the 3D scene when WebGL genuinely
-   works and the visitor hasn't asked for reduced motion; if the CDN fetch fails for any reason,
-   the fallback strip is what stays on screen. Three.js is fetched dynamically (not a <script>
-   tag) so nobody pays for it unless the scene is actually going to run. */
+/* ---- Journey: scroll-scrubbed pre-rendered sequence ---------------------------------------
+   #journeyFallback (the plain SVG strip) is still the REAL content: it is in the HTML, needs no
+   JS, and is what stays on screen if anything below fails or the visitor asked for reduced
+   motion. What replaced the old live WebGL scene is a Cycles-rendered frame sequence — path
+   traced, so the lighting, shadows and materials are well beyond what we could raster in a
+   browser, and scrubbing it costs one image decode instead of re-rendering ~1100 objects every
+   frame, which is what actually matters on the cheap Android hardware this gets opened on. */
 (function(){
-  function webglOk(){
-    try{ var c=document.createElement("canvas");
-      return !!(window.WebGLRenderingContext && (c.getContext("webgl")||c.getContext("experimental-webgl"))); }
-    catch(e){ return false; }
+  if (reduced) return;
+
+  var wrap = document.getElementById("journeyWrap");
+  var canvas = document.getElementById("journeyCanvas");
+  if (!wrap || !canvas) return;
+  var pin = wrap.querySelector(".journeyPin"),
+      fallback = document.getElementById("journeyFallback"),
+      labelEl  = document.getElementById("journeyLabel"),
+      barEl    = document.getElementById("journeyBar"),
+      hintEl   = document.getElementById("journeyHint");
+
+  var STAGES = ["Sheet & bar stock","Press & CNC work","Coating","Assembly",
+                "Quality check","Packing","Dispatch","Export"];
+  var NF = 90;
+
+  // Phones get a half-resolution set: the same 90 frames at about a third of the bytes.
+  // Save-Data is honoured too — this is a decorative sequence and nobody on a metered
+  // connection asked to pay for it.
+  var conn = navigator.connection || {};
+  var light = matchMedia("(max-width: 760px)").matches || conn.saveData === true ||
+              /(^|-)2g$/.test(conn.effectiveType || "");
+  var DIR = "assets/seq2/" + (light ? "m/" : "");
+
+  var ctx = canvas.getContext("2d", { alpha:false });
+  var frames = new Array(NF), cur = -1;
+
+  function src(i){ return DIR + "f" + (i < 9 ? "0" : "") + (i+1) + ".webp"; }
+
+  function sizeCanvas(){
+    // measure the canvas's own box, not the pin's: on phones the canvas is a letterboxed
+    // strip centred in the pin rather than filling it
+    var w = canvas.clientWidth, h = canvas.clientHeight;
+    if (!w || !h) return false;                       // laid out yet? ResizeObserver retries
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var cw = Math.round(w*dpr), ch = Math.round(h*dpr);
+    if (canvas.width !== cw || canvas.height !== ch){ canvas.width = cw; canvas.height = ch; }
+    return true;
   }
-  if (reduced || !webglOk()) return;
 
-  var wrap = document.getElementById("journeyWrap"), pin = wrap.querySelector(".journeyPin"),
-      canvas = document.getElementById("journeyCanvas"), fallback = document.getElementById("journeyFallback"),
-      labelEl = document.getElementById("journeyLabel"), barEl = document.getElementById("journeyBar"),
-      hintEl = document.getElementById("journeyHint");
+  // Nearest frame that has actually decoded, so a half-finished preload shows a slightly
+  // stale frame instead of a blank canvas.
+  function pick(i){
+    if (frames[i]) return frames[i];
+    for (var d = 1; d < NF; d++){
+      if (i-d >= 0   && frames[i-d]) return frames[i-d];
+      if (i+d < NF   && frames[i+d]) return frames[i+d];
+    }
+    return null;
+  }
 
-  Promise.all([
-    import("three"),
-    import("three/addons/loaders/GLTFLoader.js"),
-    import("three/addons/environments/RoomEnvironment.js")
-  ]).then(function(mods){ boot(mods[0], mods[1].GLTFLoader, mods[2].RoomEnvironment); })
-    .catch(function(){ /* offline or CDN blocked — the fallback strip is already showing */ });
+  function draw(i){
+    var im = pick(i);
+    if (!im || !canvas.width) return;
+    var cw = canvas.width, ch = canvas.height,
+        s  = Math.max(cw/im.naturalWidth, ch/im.naturalHeight),   // cover, centre-cropped
+        dw = im.naturalWidth*s, dh = im.naturalHeight*s;
+    ctx.drawImage(im, (cw-dw)/2, (ch-dh)/2, dw, dh);
+  }
 
-  function boot(THREE, GLTFLoader, RoomEnvironment){
+  function progressOf(){
+    var total = wrap.offsetHeight - innerHeight;
+    if (total <= 0) return 0;
+    return Math.min(1, Math.max(0, -wrap.getBoundingClientRect().top / total));
+  }
+
+  var ticking = false;
+  function apply(){
+    ticking = false;
+    var p = progressOf();
+    var i = Math.round(p * (NF-1));
+    if (i !== cur){ cur = i; draw(i); }
+    // The render camera walks the stage list linearly in progress, so this is the very
+    // index each frame was rendered at rather than an approximation of it.
+    labelEl.textContent = STAGES[Math.round(p * (STAGES.length-1))];
+    labelEl.classList.toggle("show", p > 0.008 && p < 0.995);
+    barEl.style.width = (p*100).toFixed(1) + "%";
+    hintEl.classList.toggle("hide", p > 0.03);
+  }
+  function onScroll(){ if (!ticking){ ticking = true; requestAnimationFrame(apply); } }
+  function refresh(){ if (sizeCanvas()){ cur = -1; apply(); } }
+
+  function loadFrame(i, done){
+    var im = new Image();
+    im.decoding = "async";
+    im.onload  = function(){ frames[i] = im; done(true); };
+    im.onerror = function(){ done(false); };
+    im.src = src(i);
+  }
+
+  // Frame 1 is the gate: if it will not load there is no point tearing down the fallback.
+  loadFrame(0, function(ok){
+    if (!ok) return;
     wrap.classList.add("active");
+    fallback.style.display = "none";
+    addEventListener("scroll", onScroll, { passive:true });
+    addEventListener("resize", refresh);
+    if ("ResizeObserver" in window) new ResizeObserver(refresh).observe(pin);
+    refresh();
 
-    var STAGES = ["Sheet & bar stock","Press & CNC work","Coating","Assembly","Quality check","Packing","Dispatch","Export"];
-    var N = STAGES.length, SPACING = 16;
-    // Stage spacing is NOT uniform: the ship is 22.8 units long and simply does not fit a
-    // 16-unit slot — at even spacing its stern overlapped the truck and sat on the concrete.
-    // Stage 7 is pushed out so there is real open water between the dock and the vessel.
-    var stageX = [0, 16, 32, 48, 64, 80, 96, 132];
-    var SEA_START = 110;      // waterline: must sit between the dock and the ship's stern (121)
-
-    var renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true});
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
-    // Filmic tone mapping + sRGB output. Without these, physically-lit metal clips to flat
-    // white and the whole scene reads washed-out and "CG-primitive".
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.82;   // matches the mood of the Cycles stills
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    // Soft shadows: the single biggest cue that objects are SITTING on the floor rather
-    // than floating above it.
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-    // Dim, slightly warm haze to match the Cycles stills — the practical fittings and the
-    // low sun should carry the image, not flat ambient. Fog also hides the sea's far edge.
-    var BG = 0x5B5E63;
-    var scene = new THREE.Scene();
-    scene.background = new THREE.Color(BG);
-    scene.fog = new THREE.Fog(BG, 26, 96);
-
-    var camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
-
-    // ---- image-based lighting -------------------------------------------------
-    // THE key realism fix. Metal only looks like metal when it has something to reflect;
-    // with lights alone, chrome and steel render as flat grey plastic. RoomEnvironment is
-    // generated procedurally inside three.js, so this costs ZERO extra download.
-    var pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-
-    // ambient pulled right down; a low warm key does the shaping, as in the renders
-    scene.add(new THREE.HemisphereLight(0xBFCBD8, 0x3A3B3E, 0.42));
-    var sun = new THREE.DirectionalLight(0xFFD9A8, 2.5);
-    sun.position.set(14, 12, 16);          // low angle -> long raking shadows
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.bias = -0.0012;
-    sun.shadow.normalBias = 0.02;
-    // The scene is ~130 units long, so one shadow map cannot cover it at usable resolution.
-    // The shadow camera is kept small and moved to follow the viewer (see applyProgress).
-    var sc = sun.shadow.camera;
-    sc.left = -22; sc.right = 22; sc.top = 22; sc.bottom = -22; sc.near = 1; sc.far = 90;
-    sc.updateProjectionMatrix();
-    scene.add(sun);
-    scene.add(sun.target);
-    var fill = new THREE.DirectionalLight(0xA8C4DE, 0.30);   // cool bounce, keeps shadows readable
-    fill.position.set(-14, 10, -10);
-    scene.add(fill);
-
-    // ground tones: painted shop-floor concrete → concrete dock → open sea
-    var FLOOR=0xC2BFB8, DOCK=0x8E8D88, SEA=0x2C6A8C;
-    function mat(c, rough){ return new THREE.MeshStandardMaterial({color:c, roughness: rough!=null?rough:0.75, metalness:0.08}); }
-
-    // ---- ground: factory floor → dock → sea, three contiguous flat segments ----
-    function addGround(from, to, color){
-      var w = to - from;
-      var g = new THREE.Mesh(new THREE.PlaneGeometry(w, 30), mat(color, 0.95));
-      g.rotation.x = -Math.PI/2; g.position.set(from + w/2, 0, 4);
-      scene.add(g);
-    }
-    // The factory slab now comes from the model itself (assets/journey.glb), so only the
-    // outdoor ground is built here — adding a plane under the building too would z-fight.
-    addGround(stageX[5] + SPACING*0.5, SEA_START, DOCK);
-
-    // ---- moving sea ------------------------------------------------------------
-    // Waves are displaced in the VERTEX SHADER, so the CPU does no per-frame work at all and
-    // the normals are derived analytically (the exact derivative of the height function)
-    // rather than by recomputing them on the mesh, which would be far too slow every frame.
-    var seaTimeUniforms = [];
-    (function buildSea(){
-      // Runs far past the ship in every direction so no water edge is ever in frame —
-      // the ship should read as being out at sea, not floating on a visible slab.
-      var from = SEA_START, to = stageX[7] + SPACING*14, w = to - from;
-      var geo = new THREE.PlaneGeometry(w, 300, Math.max(40, Math.round(w/2.2)), 90);
-      var m = new THREE.MeshStandardMaterial({color: SEA, roughness: 0.22, metalness: 0.15});
-      m.onBeforeCompile = function(shader){
-        shader.uniforms.uTime = {value: 0};
-        seaTimeUniforms.push(shader.uniforms.uTime);
-        var WAVE = [
-          "float A1=0.13, K1=0.42, S1=1.05;",
-          "float A2=0.09, K2=0.61, S2=0.83;",
-          "float A3=0.06, K3=0.27, S3=0.61;",
-          "float p1 = position.x*K1 + uTime*S1;",
-          "float p2 = position.y*K2 - uTime*S2;",
-          "float p3 = (position.x+position.y)*K3 + uTime*S3;",
-          "float h  = sin(p1)*A1 + sin(p2)*A2 + sin(p3)*A3;",
-          "float dx = cos(p1)*A1*K1 + cos(p3)*A3*K3;",
-          "float dy = cos(p2)*A2*K2 + cos(p3)*A3*K3;"
-        ].join("\n");
-        shader.vertexShader = "uniform float uTime;\n" + shader.vertexShader
-          .replace("#include <beginnormal_vertex>",
-                   WAVE + "\nvec3 objectNormal = normalize(vec3(-dx, -dy, 1.0));")
-          .replace("#include <begin_vertex>",
-                   "vec3 transformed = vec3(position.x, position.y, position.z + h);");
-      };
-      var sea = new THREE.Mesh(geo, m);
-      sea.rotation.x = -Math.PI/2;
-      sea.position.set(from + w/2, 0, 4);
-      sea.receiveShadow = true;
-      scene.add(sea);
-    })();
-
-    var anims = []; // idle-animation callbacks, run every frame with elapsed seconds
-
-    // ---- the machines themselves: one glb modelled in Blender, already laid out along X
-    // at SPACING intervals to match stageX. Loaded after the scene exists so the ground and
-    // camera are live immediately and the models simply appear when they arrive. ----
-    new GLTFLoader().load("assets/journey.glb", function(gltf){
-      var root = gltf.scene;
-      root.traverse(function(o){
-        if (!o.isMesh) return;
-        var n = o.name.toLowerCase();
-        // Big flat surfaces only RECEIVE shadow — letting the floor/roof cast as well
-        // just produces acne and eats the shadow map's resolution budget.
-        var flat = /^(fac_floor|roof_|skylite|wall_|lane_|hatch_|guard_)/.test(n);
-        o.castShadow = !flat;
-        o.receiveShadow = true;
-        if (o.material){
-          o.material.envMapIntensity = 0.85;
-          // Make the fittings and skylights genuinely glow. glTF clamps emissiveFactor to
-          // 0..1, so the strong emission set in Blender arrives dim — push it back up here
-          // or the darker grade just looks underexposed instead of atmospherically lit.
-          if (/^(lamp_lens|skylite)/.test(n)){
-            o.material.emissive = new THREE.Color(/^lamp/.test(n) ? 0xFFE0B0 : 0xCFE2FF);
-            o.material.emissiveIntensity = /^lamp/.test(n) ? 3.2 : 1.6;
-            o.material.toneMapped = true;
-          }
-          o.material.needsUpdate = true;
-        }
-      });
-      scene.add(root);
-      fallback.style.display = "none";   // only now that the machines are actually on screen
-      measureStages(THREE, root);        // frame each stage to its real size
-      applyProgress();
-
-      // find a few named parts to animate; names come straight from the Blender build
-      function find(n){ return root.getObjectByName(n); }
-      var ram = find("ram"), fly = find("flywheel"), chuck = find("cnc_chuck");
-      var hull = find("hull"), boot = find("boot");
-
-      // Only things that would ACTUALLY be moving get animated. The truck is parked at the
-      // loading dock, so its wheels must stay still — spinning them while it sits there was
-      // the single most obviously wrong thing in the scene.
-      if (ram){ var ramY = ram.position.y;
-        anims.push(function(t){ ram.position.y = ramY + Math.abs(Math.sin(t*1.5))*0.55; }); }
-      if (fly)   anims.push(function(t){ fly.rotation.x = t*2.2; });
-      if (chuck) anims.push(function(t){ chuck.rotation.x = t*4.0; });
-
-      // the ship rides the swell: gentle heave + roll, matched to the sea's wave period
-      if (hull){
-        var parts = [hull, boot].concat([]);
-        root.traverse(function(o){ if (/^(cont_|lash_|house|bridge|funnel|mast|wing_|hatch|winch_|bow_rail|acc_ladder|bulb)/.test(o.name)) parts.push(o); });
-        var base = parts.map(function(o){ return {o:o, y:o.position.y, rz:o.rotation.z}; });
-        anims.push(function(t){
-          var heave = Math.sin(t*0.55)*0.10, roll = Math.sin(t*0.42)*0.016;
-          base.forEach(function(b){ if(!b.o) return; b.o.position.y = b.y + heave; b.o.rotation.z = b.rz + roll; });
-        });
+    // Pull the rest in a few at a time: fills the sequence in quickly without saturating
+    // the connection while the rest of the page is still loading.
+    var next = 1, inflight = 0;
+    (function pump(){
+      while (inflight < 5 && next < NF){
+        inflight++;
+        loadFrame(next++, function(){ inflight--; if (cur >= 0) draw(cur); pump(); });
       }
-    }, undefined, function(){
-      // model failed to load — keep the scene but restore the plain SVG strip so the
-      // section still communicates the eight stages rather than showing an empty floor
-      wrap.classList.remove("active");
-      fallback.style.display = "";
-    });
-
-    // ---- sizing ----
-    function size(){
-      var w = pin.clientWidth, h = pin.clientHeight;
-      if (!w || !h) return;
-      renderer.setSize(w, h, false);
-      camera.aspect = w/h; camera.updateProjectionMatrix();
-    }
-    size();
-    addEventListener("resize", size);
-
-    // ---- scroll-driven camera: flies alongside the line as the tall wrapper scrolls past.
-    // LOOK_AHEAD is deliberately small (well under half a stage gap) so whichever stage is
-    // named in the label is also the one actually centred in frame — a wide look-ahead was
-    // tried first and made the NEXT stage dominate the view while the label still named the
-    // one behind it (found by screenshotting several scroll positions, not just eyeballing 0%). ----
-    var START_X = -6, END_X = stageX[N-1] + 7, CAM_Y = 5.2, CAM_Z = 12.5, LOOK_Y = 1.6, LOOK_AHEAD = 3;
-    // Per-stage framing. The stages differ enormously in size — the inspection bench is ~2m,
-    // the ship ~17m — so one fixed camera distance either dwarfs the small stages or crops
-    // the ship. These are filled in from the model's real bounding boxes once it loads.
-    var frameDist = [], frameY = [];
-    for (var i=0;i<N;i++){ frameDist.push(CAM_Z); frameY.push(LOOK_Y); }
-    function measureStages(THREE, root){
-      var perStage = [];
-      for (var i=0;i<N;i++) perStage.push(new THREE.Box3());
-      var b = new THREE.Box3(), c = new THREE.Vector3();
-      root.traverse(function(o){
-        if (!o.isMesh) return;
-        b.setFromObject(o); b.getCenter(c);
-        var idx = nearestStageIdx(c.x);
-        perStage[idx].union(b);
-      });
-      perStage.forEach(function(bb, i){
-        if (bb.isEmpty()) return;
-        var s = new THREE.Vector3(); bb.getSize(s);
-        var ctr = new THREE.Vector3(); bb.getCenter(ctr);
-        // distance that fits the stage's height and depth in a 42° vertical FOV, with headroom
-        var extent = Math.max(s.y, s.z * 0.6, 3);
-        // pulled in tighter than the first pass — the machines were sitting too far away
-        // to read, especially the smaller stations
-        frameDist[i] = Math.min(21, Math.max(7, extent * 1.85 + 2.6));
-        frameY[i]    = Math.min(4.2, Math.max(1.0, ctr.y * 0.72));
-      });
-    }
-    function lerpAtX(arr, x){
-      // Blend between the two bracketing stages. This walks the real stageX array rather
-      // than dividing by SPACING — the stages are no longer evenly spaced, so the old
-      // x/SPACING shortcut would pick the wrong pair and jump the camera near the ship.
-      if (x <= stageX[0])   return arr[0];
-      if (x >= stageX[N-1]) return arr[N-1];
-      for (var i = 0; i < N-1; i++){
-        if (x >= stageX[i] && x <= stageX[i+1]){
-          var t = (x - stageX[i]) / (stageX[i+1] - stageX[i]);
-          t = t*t*(3-2*t);
-          return arr[i] + (arr[i+1] - arr[i]) * t;
-        }
-      }
-      return arr[N-1];
-    }
-    var ticking = false;
-    function computeProgress(){
-      var rect = wrap.getBoundingClientRect();
-      var total = wrap.offsetHeight - innerHeight;
-      if (total <= 0) return 0;
-      return Math.min(1, Math.max(0, -rect.top / total));
-    }
-    function nearestStageIdx(x){
-      var idx = 0, best = Infinity;
-      stageX.forEach(function(sx, i){ var d = Math.abs(sx - x); if (d < best){ best = d; idx = i; } });
-      return idx;
-    }
-    function applyProgress(){
-      ticking = false;
-      var progress = computeProgress();
-      var x = START_X + (END_X - START_X) * progress;
-      var dist = lerpAtX(frameDist, x), ly = lerpAtX(frameY, x);
-      camera.position.set(x, CAM_Y + dist*0.20, dist);
-      camera.lookAt(x + LOOK_AHEAD, ly, 0);
-      // keep the (deliberately small) shadow frustum centred on whatever we're looking at
-      sun.position.set(x + 14, 26, 16);
-      sun.target.position.set(x + 2, 0, 0);
-      sun.target.updateMatrixWorld();
-      // label tracks whichever stage the camera is actually nearest to, NOT a naive fraction
-      // of progress — the two drift apart because START_X/END_X pad past stage 0 and stage 7.
-      var idx = nearestStageIdx(x);
-      labelEl.textContent = STAGES[idx];
-      labelEl.classList.toggle("show", progress > 0.008 && progress < 0.995);
-      barEl.style.width = (progress*100).toFixed(1) + "%";
-      hintEl.classList.toggle("hide", progress > 0.03);
-    }
-    addEventListener("scroll", function(){
-      if (!ticking){ ticking = true; requestAnimationFrame(applyProgress); }
-    }, {passive:true});
-    applyProgress();
-
-    // ---- pause the render loop entirely once the scene scrolls out of view ----
-    var active = true;
-    if ("IntersectionObserver" in window){
-      new IntersectionObserver(function(es){ active = es[0].isIntersecting; }, {threshold:0}).observe(wrap);
-    }
-
-    var clock = new THREE.Clock();
-    (function loop(){
-      requestAnimationFrame(loop);
-      if (!active) return;
-      var t = clock.getElapsedTime();
-      for (var si = 0; si < seaTimeUniforms.length; si++) seaTimeUniforms[si].value = t;
-      anims.forEach(function(fn){ fn(t); });
-      renderer.render(scene, camera);
     })();
-  }
+  });
 })();
 
 /* ---- screenshot gallery ---- */
